@@ -54,11 +54,16 @@
 
 #include <math.h>
 
+
+
 MainWidget::MainWidget(QWidget *parent) :
     QOpenGLWidget(parent),
     geometries(0),
-    texture(0),
-    angularSpeed(0)
+    textureGrass(0), textureHeight(0), textureRock(0), textureSnow(0),
+    angularSpeed(0),
+    cameraPos(0.0f, 0.0f, 0.0f),
+    cameraFront(0.0f, 0.0f, -1.0f),
+    cameraUp(0.0f, 1.0f, 0.0f)
 {
 }
 
@@ -67,7 +72,10 @@ MainWidget::~MainWidget()
     // Make sure the context is current when deleting the texture
     // and the buffers.
     makeCurrent();
-    delete texture;
+    delete textureGrass;
+    delete textureHeight;
+    delete textureRock;
+    delete textureSnow;
     delete geometries;
     doneCurrent();
 }
@@ -99,6 +107,31 @@ void MainWidget::mouseReleaseEvent(QMouseEvent *e)
 }
 //! [0]
 
+
+void MainWidget::keyPressEvent(QKeyEvent *e)
+{
+    const float cameraSpeed = 0.05f;
+    if(e->key() == Qt::Key_Up)
+    {
+        cameraPos += cameraSpeed * cameraFront;
+    }
+    if(e->key() == Qt::Key_Down)
+    {
+        cameraPos -= cameraSpeed * cameraFront;
+    }
+    if(e->key() == Qt::Key_Right)
+    {
+        QVector3D vectemp = QVector3D().crossProduct(cameraUp,cameraFront);
+        cameraPos -= vectemp.normalized() * cameraSpeed;
+    }
+    if(e->key() == Qt::Key_Left)
+    {
+        QVector3D vectemp = QVector3D().crossProduct(cameraUp,cameraFront);
+        cameraPos += vectemp.normalized() * cameraSpeed;
+    }
+}
+
+
 //! [1]
 void MainWidget::timerEvent(QTimerEvent *)
 {
@@ -127,15 +160,19 @@ void MainWidget::initializeGL()
     initShaders();
     initTextures();
 
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
 //! [2]
     // Enable depth buffer
     glEnable(GL_DEPTH_TEST);
 
     // Enable back face culling
-    glEnable(GL_CULL_FACE);
+    //glEnable(GL_CULL_FACE);
 //! [2]
 
     geometries = new GeometryEngine;
+
+    cameraFront.setZ(-1.0f);
 
     // Use QBasicTimer because its faster than QTimer
     timer.start(12, this);
@@ -165,18 +202,39 @@ void MainWidget::initShaders()
 //! [4]
 void MainWidget::initTextures()
 {
-    // Load cube.png image
-    texture = new QOpenGLTexture(QImage(":/grass.png").mirrored());
+    // Load grass.png image
+    textureGrass = new QOpenGLTexture(QImage(":/grass.png").mirrored());
 
     // Set nearest filtering mode for texture minification
-    texture->setMinificationFilter(QOpenGLTexture::Nearest);
+    textureGrass->setMinificationFilter(QOpenGLTexture::Nearest);
 
     // Set bilinear filtering mode for texture magnification
-    texture->setMagnificationFilter(QOpenGLTexture::Linear);
+    textureGrass->setMagnificationFilter(QOpenGLTexture::Linear);
 
     // Wrap texture coordinates by repeating
     // f.ex. texture coordinate (1.1, 1.2) is same as (0.1, 0.2)
-    texture->setWrapMode(QOpenGLTexture::Repeat);
+    textureGrass->setWrapMode(QOpenGLTexture::Repeat);
+
+
+    // Load height map
+    textureHeight = new QOpenGLTexture(QImage(":/heightmap.png"));
+    textureHeight->setMinificationFilter(QOpenGLTexture::Nearest);
+    textureHeight->setMagnificationFilter(QOpenGLTexture::Linear);
+    textureHeight->setWrapMode(QOpenGLTexture::Repeat);
+
+
+    // Load rock.png
+    textureRock = new QOpenGLTexture(QImage(":/rock.png"));
+    textureRock->setMinificationFilter(QOpenGLTexture::Nearest);
+    textureRock->setMagnificationFilter(QOpenGLTexture::Linear);
+    textureRock->setWrapMode(QOpenGLTexture::Repeat);
+
+
+    // Load snowrocks.png
+    textureSnow = new QOpenGLTexture(QImage(":/snowrocks.png"));
+    textureSnow->setMinificationFilter(QOpenGLTexture::Nearest);
+    textureSnow->setMagnificationFilter(QOpenGLTexture::Linear);
+    textureSnow->setWrapMode(QOpenGLTexture::Repeat);
 }
 //! [4]
 
@@ -187,7 +245,7 @@ void MainWidget::resizeGL(int w, int h)
     qreal aspect = qreal(w) / qreal(h ? h : 1);
 
     // Set near plane to 3.0, far plane to 7.0, field of view 45 degrees
-    const qreal zNear = 3.0, zFar = 7.0, fov = 45.0;
+    const qreal zNear = 3.0, zFar = 20.0, fov = 45.0;
 
     // Reset projection
     projection.setToIdentity();
@@ -196,26 +254,42 @@ void MainWidget::resizeGL(int w, int h)
     projection.perspective(fov, aspect, zNear, zFar);
 }
 //! [5]
+//!
+//!
+
 
 void MainWidget::paintGL()
 {
     // Clear color and depth buffer
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    texture->bind();
+    textureGrass->bind(0);
+    textureHeight->bind(1);
+    textureRock->bind(2);
+    textureSnow->bind(3);
 
 //! [6]
     // Calculate model view transformation
     QMatrix4x4 matrix;
     matrix.translate(0.0, 0.0, -5.0);
     matrix.rotate(rotation);
+    matrix.scale(0.3f);
 
+    QMatrix4x4 view;
+    view.lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+
+    //printf("%f %f %f\n", view.x );
     // Set modelview-projection matrix
-    program.setUniformValue("mvp_matrix", projection * matrix);
+    program.setUniformValue("mvp_matrix", projection * view * matrix);
 //! [6]
 
-    // Use texture unit 0 which contains cube.png
-    program.setUniformValue("texture", 0);
+    // Use texture unit 0 which contains grass.png
+    program.setUniformValue("textureGrass", 0);
+    program.setUniformValue("textureHeight", 1);
+    program.setUniformValue("textureRock", 2);
+    program.setUniformValue("textureSnow", 3);
+
 
     // Draw cube geometry
     geometries->drawSurfaceGeometry(&program);

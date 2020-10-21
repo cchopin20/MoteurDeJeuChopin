@@ -51,6 +51,8 @@
 #include "geometryengine.h"
 
 #include <QVector2D>
+
+
 #include <QVector3D>
 
 struct VertexData
@@ -178,36 +180,13 @@ void GeometryEngine::drawCubeGeometry(QOpenGLShaderProgram *program)
 }
 //! [2]
 
+
 void GeometryEngine::initSurfaceGeometry()
 {
     // For cube we would need only 8 vertices but we have to
     // duplicate vertex for each face because texture coordinate
     // is different.
-    VertexData vertices[] = {
-        // Vertex data for face 0
-        {QVector3D( 0.0f,  0.0f,  0.0f), QVector2D(0.0f, 0.0f)},  // v0
-        {QVector3D( 1.0f,  0.0f,  0.0f), QVector2D(0.33f, 0.0f)}, // v1
-        {QVector3D( 2.0f,  0.0f,  0.0f), QVector2D(0.0f, 0.5f)},  // v2
-        {QVector3D( 3.0f,  0.0f,  0.0f), QVector2D(0.33f, 0.5f)}, // v3
 
-        // Vertex data for face 1
-        {QVector3D( 0.0f,  1.0f,  0.0f), QVector2D( 0.0f, 0.5f)}, // v4
-        {QVector3D( 1.0f,  1.0f,  0.0f), QVector2D(0.33f, 0.5f)}, // v5
-        {QVector3D( 2.0f,  1.0f,  0.0f), QVector2D(0.0f, 1.0f)},  // v6
-        {QVector3D( 3.0f,  1.0f,  0.0f), QVector2D(0.33f, 1.0f)}, // v7
-
-        // Vertex data for face 2
-        {QVector3D( 0.0f,  2.0f,  0.0f), QVector2D(0.66f, 0.5f)}, // v8
-        {QVector3D( 1.0f,  2.0f,  0.0f), QVector2D(1.0f, 0.5f)},  // v9
-        {QVector3D( 2.0f,  2.0f,  0.0f), QVector2D(0.66f, 1.0f)}, // v10
-        {QVector3D( 3.0f,  2.0f,  0.0f), QVector2D(1.0f, 1.0f)},  // v11
-
-        // Vertex data for face 3
-        {QVector3D( 0.0f,  3.0f,  0.0f), QVector2D(0.66f, 0.0f)}, // v12
-        {QVector3D( 1.0f,  3.0f,  0.0f), QVector2D(1.0f, 0.0f)},  // v13
-        {QVector3D( 2.0f,  3.0f,  0.0f), QVector2D(0.66f, 0.5f)}, // v14
-        {QVector3D( 3.0f,  3.0f,  0.0f), QVector2D(1.0f, 0.5f)},  // v15
-    };
 
     // Indices for drawing cube faces using triangle strips.
     // Triangle strips can be connected by duplicating indices
@@ -216,22 +195,52 @@ void GeometryEngine::initSurfaceGeometry()
     // index of the second strip needs to be duplicated. If
     // connecting strips have same vertex order then only last
     // index of the first strip needs to be duplicated.
-    GLushort indices[] = {
-        0, 4, 1, 5, 2, 6, 3, 7, 7,
-        4, 4, 8, 5, 9, 6, 10, 7, 11, 11,
-        8, 8, 12, 9, 13, 10, 14, 11, 15
-    };
+
+    int sizeX = 16;
+    int sizeY = 16;
+
+    srand (time(NULL));
+    float centerX = (sizeX - 1) / 2;
+    float centerY = (sizeY - 1) / 2;
+    QVector<VertexData> vertices;
+
+    for(float j=0.0f; j<sizeY; j++)
+    {
+        for(float i=0.0f; i<sizeX; i++)
+        {
+            vertices.push_back({QVector3D(i - centerX, centerY - j, 0.0), QVector2D(i / sizeX, j / sizeY)});
+        }
+    }
+
+    QVector<GLushort> indices;
+
+
+    for(int j = 0; j < sizeY - 1; j++)
+    {
+        for(int i = 0; i < sizeX; i++)
+        {
+            indices.push_back(i + (j * sizeX));
+
+            if(i==0 && j != 0)
+            {
+               indices.push_back(indices.last());
+            }
+            indices.push_back(i + ((j+1) * sizeX));
+        }
+        indices.push_back(indices.last());
+    }
 
 //! [1]
     // Transfer vertex data to VBO 0
     arrayBuf.bind();
-    arrayBuf.allocate(vertices, 24 * sizeof(VertexData));
+    arrayBuf.allocate(vertices.data(), vertices.size() * sizeof(VertexData));
 
     // Transfer index data to VBO 1
     indexBuf.bind();
-    indexBuf.allocate(indices, 34 * sizeof(GLushort));
+    indexBuf.allocate(indices.data(), indices.size() * sizeof(GLushort));
 //! [1]
 }
+
 
 //! [2]
 void GeometryEngine::drawSurfaceGeometry(QOpenGLShaderProgram *program)
@@ -257,5 +266,5 @@ void GeometryEngine::drawSurfaceGeometry(QOpenGLShaderProgram *program)
     program->setAttributeBuffer(texcoordLocation, GL_FLOAT, offset, 2, sizeof(VertexData));
 
     // Draw cube geometry using indices from VBO 1
-    glDrawElements(GL_TRIANGLE_STRIP, 34, GL_UNSIGNED_SHORT, 0);
+    glDrawElements(GL_TRIANGLE_STRIP, indexBuf.size(), GL_UNSIGNED_SHORT, 0);
 }

@@ -84,19 +84,29 @@ protected:
     void initShaders();
     void initTextures();
 
+    void keyPressEvent(QKeyEvent *e) override;
+
 private:
     QBasicTimer timer;
     QOpenGLShaderProgram program;
     GeometryEngine *geometries;
 
-    QOpenGLTexture *texture;
+    QOpenGLTexture *textureGrass;
+    QOpenGLTexture *textureHeight;
+    QOpenGLTexture *textureRock;
+    QOpenGLTexture *textureSnow;
 
     QMatrix4x4 projection;
+    QMatrix4x4 view;
 
     QVector2D mousePressPosition;
     QVector3D rotationAxis;
     qreal angularSpeed;
     QQuaternion rotation;
+
+    QVector3D cameraPos;
+    QVector3D cameraFront;
+    QVector3D cameraUp;
 };
 
 #endif // MAINWIDGET_H
